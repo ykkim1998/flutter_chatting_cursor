@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
-import '../viewmodels/chat_viewmodel.dart';
+import '../models/chat_memory.dart';
 import '../widgets/chat_message_widget.dart';
 
 class ChatScreen extends StatelessWidget {
@@ -9,7 +9,7 @@ class ChatScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => ChatViewModel(),
+      create: (_) => ChatMemory(),
       child: const ChatScreenContent(),
     );
   }
@@ -28,78 +28,75 @@ class _ChatScreenContentState extends State<ChatScreenContent> {
   final FocusNode _focusNode = FocusNode();
 
   @override
-  void initState() {
-    super.initState();
-    _focusNode.addListener(_onFocusChange);
-  }
-
-  @override
   void dispose() {
     _textController.dispose();
     _scrollController.dispose();
-    _focusNode.removeListener(_onFocusChange);
     _focusNode.dispose();
     super.dispose();
   }
 
-  void _onFocusChange() {
-    if (_focusNode.hasFocus) {
-      _scrollToBottom();
-    }
+  void _sendMessage(String text) {
+    if (text.trim().isEmpty) return;
+
+    final chatMemory = context.read<ChatMemory>();
+    
+    // 사용자 메시지 추가
+    chatMemory.addMessage(text, true);
+    
+    // AI 응답 시뮬레이션 (실제로는 서버 통신 코드로 대체)
+    Future.delayed(const Duration(seconds: 1), () {
+      chatMemory.addMessage("AI의 응답: $text", false);
+    });
+
+    _textController.clear();
+    _focusNode.requestFocus();
+    _scrollToBottom();
   }
 
   void _scrollToBottom() {
-    if (_scrollController.hasClients) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final viewModel = context.watch<ChatViewModel>();
-    final size = MediaQuery.of(context).size;
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
-    final theme = CupertinoTheme.of(context);
-
     return CupertinoPageScaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
       navigationBar: const CupertinoNavigationBar(
-        middle: Text(
-          'AI Chat',
-          style: TextStyle(
-            fontFamily: 'SF Pro Display',
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        backgroundColor: CupertinoColors.systemBackground,
+        middle: Text('채팅'),
       ),
       child: SafeArea(
         child: Column(
           children: [
             Expanded(
-              child: ListView.builder(
-                controller: _scrollController,
-                padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomPadding),
-                itemCount: viewModel.messages.length,
-                itemBuilder: (context, index) {
-                  return ChatMessageWidget(
-                    message: viewModel.messages[index],
+              child: Consumer<ChatMemory>(
+                builder: (context, chatMemory, child) {
+                  return ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.all(8),
+                    itemCount: chatMemory.messages.length,
+                    itemBuilder: (context, index) {
+                      return ChatMessageWidget(
+                        message: chatMemory.messages[index],
+                      );
+                    },
                   );
                 },
               ),
             ),
             Container(
-              padding: EdgeInsets.fromLTRB(16, 8, 16, 8 + bottomPadding),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: theme.barBackgroundColor,
+                color: CupertinoColors.systemBackground,
                 border: Border(
                   top: BorderSide(
-                    color: CupertinoColors.systemGrey4,
-                    width: 0.5,
+                    color: CupertinoColors.systemGrey5,
                   ),
                 ),
               ),
@@ -109,34 +106,22 @@ class _ChatScreenContentState extends State<ChatScreenContent> {
                     child: CupertinoTextField(
                       controller: _textController,
                       focusNode: _focusNode,
-                      placeholder: '메시지를 입력하세요...',
-                      placeholderStyle: TextStyle(
-                        color: theme.textTheme.textStyle.color?.withOpacity(0.5),
-                        fontFamily: 'SF Pro Text',
-                      ),
+                      placeholder: '메시지를 입력하세요',
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
+                        horizontal: 12,
+                        vertical: 8,
                       ),
                       decoration: BoxDecoration(
-                        color: theme.barBackgroundColor,
+                        color: CupertinoColors.systemGrey6,
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: CupertinoColors.systemGrey4,
-                          width: 0.5,
-                        ),
                       ),
-                      style: TextStyle(
-                        fontFamily: 'SF Pro Text',
-                        color: theme.textTheme.textStyle.color,
-                      ),
-                      onSubmitted: (_) => _sendMessage(viewModel),
+                      onSubmitted: (text) => _sendMessage(text),
                     ),
                   ),
                   const SizedBox(width: 8),
                   CupertinoButton(
-                    onPressed: () => _sendMessage(viewModel),
-                    padding: const EdgeInsets.all(12),
+                    padding: EdgeInsets.zero,
+                    onPressed: () => _sendMessage(_textController.text),
                     child: const Icon(
                       CupertinoIcons.arrow_up_circle_fill,
                       size: 32,
@@ -150,13 +135,5 @@ class _ChatScreenContentState extends State<ChatScreenContent> {
         ),
       ),
     );
-  }
-
-  void _sendMessage(ChatViewModel viewModel) {
-    if (_textController.text.trim().isNotEmpty) {
-      viewModel.sendMessage(_textController.text);
-      _textController.clear();
-      _scrollToBottom();
-    }
   }
 } 
